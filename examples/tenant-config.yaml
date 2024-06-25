@@ -1,7 +1,7 @@
 tenants:
-  - name: random
+  - value: random
     groups:
       - 0bd8b979-3802-4b76-b326-2299b6201c9b
-  - name: prometheus
+  - value: prometheus
     groups:
       - 0e3d7275-39aa-44cd-8c21-bc62aaf94e73

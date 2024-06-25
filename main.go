@@ -255,7 +255,7 @@ func (c *OIDCConfig) readOIDCConfig(path string) error {
 }
 
 type Tenant struct {
-	Name   string   `yaml:"name"`
+	Value  string   `yaml:"value"`
 	Groups []string `yaml:"groups"`
 	Users  []string `yaml:"users"`
 }
@@ -301,13 +301,15 @@ func (ote OIDCTokenEnforcer) ExtractLabel(next http.HandlerFunc) http.Handler {
 		}
 
 		for _, t := range config.Tenants {
+			itTenantMember := false
 			for _, g := range t.Groups {
 				if slices.Contains(claims.Groups, g) {
-					labelValues = append(labelValues, t.Name)
+					itTenantMember = true
+					break
 				}
 			}
-			if slices.Contains(t.Users, claims.Email) {
-				labelValues = append(labelValues, t.Name)
+			if itTenantMember || slices.Contains(t.Users, claims.Email) {
+				labelValues = append(labelValues, t.Value)
 			}
 		}
 
@@ -316,7 +318,7 @@ func (ote OIDCTokenEnforcer) ExtractLabel(next http.HandlerFunc) http.Handler {
 			return
 		}
 
-		next(w, r.WithContext(injectproxy.WithLabelValues(r.Context(), labelValues)))
+		next(w, r.WithContext(injectproxy.WithLabelValues(r.Context(), []string{strings.Join(labelValues, "|")})))
 	})
 }
 func humanFriendlyErrorMessage(err error) string {
