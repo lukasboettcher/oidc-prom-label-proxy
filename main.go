@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"regexp"
 	"slices"
 	"strings"
 	"syscall"
@@ -26,38 +25,16 @@ import (
 	"github.com/prometheus-community/prom-label-proxy/injectproxy"
 )
 
-type arrayFlags []string
-
-// String is the method to format the flag's value, part of the flag.Value interface.
-// The String method's output will be used in diagnostics.
-func (i *arrayFlags) String() string {
-	return fmt.Sprint(*i)
-}
-
-// Set is the method to set the flag value, part of the flag.Value interface.
-func (i *arrayFlags) Set(value string) error {
-	if value == "" {
-		return nil
-	}
-
-	*i = append(*i, value)
-	return nil
-}
-
 func main() {
 	var (
 		insecureListenAddress  string
 		internalListenAddress  string
 		upstream               string
-		queryParam             string
-		headerName             string
 		label                  string
-		labelValues            arrayFlags
 		enableLabelAPIs        bool
 		unsafePassthroughPaths string // Comma-delimited string.
 		errorOnReplace         bool
 		regexMatch             bool
-		headerUsesListSyntax   bool
 		oidcClientId           string
 		oidcIssuer             string
 		oidcConfigPath         string
@@ -66,20 +43,16 @@ func main() {
 	flagset := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	flagset.StringVar(&insecureListenAddress, "insecure-listen-address", "", "The address the prom-label-proxy HTTP server should listen on.")
 	flagset.StringVar(&internalListenAddress, "internal-listen-address", "", "The address the internal prom-label-proxy HTTP server should listen on to expose metrics about itself.")
-	flagset.StringVar(&queryParam, "query-param", "", "Name of the HTTP parameter that contains the tenant value.At most one of -query-param, -header-name and -label-value should be given. If the flag isn't defined and neither -header-name nor -label-value is set, it will default to the value of the -label flag.")
-	flagset.StringVar(&headerName, "header-name", "", "Name of the HTTP header name that contains the tenant value. At most one of -query-param, -header-name and -label-value should be given.")
 	flagset.StringVar(&upstream, "upstream", "", "The upstream URL to proxy to.")
 	flagset.StringVar(&label, "label", "", "The label name to enforce in all proxied PromQL queries.")
-	flagset.Var(&labelValues, "label-value", "A fixed label value to enforce in all proxied PromQL queries. At most one of -query-param, -header-name and -label-value should be given. It can be repeated in which case the proxy will enforce the union of values.")
-	flagset.BoolVar(&enableLabelAPIs, "enable-label-apis", false, "When specified proxy allows to inject label to label APIs like /api/v1/labels and /api/v1/label/<name>/values. "+
+	flagset.BoolVar(&enableLabelAPIs, "enable-label-apis", true, "When specified proxy allows to inject label to label APIs like /api/v1/labels and /api/v1/label/<name>/values. "+
 		"NOTE: Enable with care because filtering by matcher is not implemented in older versions of Prometheus (>= v2.24.0 required) and Thanos (>= v0.18.0 required, >= v0.23.0 recommended). If enabled and "+
 		"any labels endpoint does not support selectors, the injected matcher will have no effect.")
 	flagset.StringVar(&unsafePassthroughPaths, "unsafe-passthrough-paths", "", "Comma delimited allow list of exact HTTP path segments that should be allowed to hit upstream URL without any enforcement. "+
 		"This option is checked after Prometheus APIs, you cannot override enforced API endpoints to be not enforced with this option. Use carefully as it can easily cause a data leak if the provided path is an important "+
 		"API (like /api/v1/configuration) which isn't enforced by prom-label-proxy. NOTE: \"all\" matching paths like \"/\" or \"\" and regex are not allowed.")
 	flagset.BoolVar(&errorOnReplace, "error-on-replace", false, "When specified, the proxy will return HTTP status code 400 if the query already contains a label matcher that differs from the one the proxy would inject.")
-	flagset.BoolVar(&regexMatch, "regex-match", false, "When specified, the tenant name is treated as a regular expression. In this case, only one tenant name should be provided.")
-	flagset.BoolVar(&headerUsesListSyntax, "header-uses-list-syntax", false, "When specified, the header line value will be parsed as a comma-separated list. This allows a single tenant header line to specify multiple tenant names.")
+	flagset.BoolVar(&regexMatch, "regex-match", true, "When specified, the tenant name is treated as a regular expression. In this case, only one tenant name should be provided.")
 	flagset.StringVar(&oidcClientId, "oidc-client-id", "", "The Clien ID of the oidc issuer.")
 	flagset.StringVar(&oidcIssuer, "oidc-issuer", "", "The URL for the OIDC issuer.")
 	flagset.StringVar(&oidcConfigPath, "oidc-config", "", "The path to a config file for mapping tenants to groups.")
@@ -90,16 +63,8 @@ func main() {
 		log.Fatalf("-label flag cannot be empty")
 	}
 
-	if len(labelValues) == 0 && queryParam == "" && headerName == "" && (oidcClientId == "" || oidcIssuer == "") {
-		queryParam = label
-	}
-
-	if len(labelValues) > 0 {
-		if queryParam != "" || headerName != "" {
-			log.Fatalf("at most one of -query-param, -header-name and -label-value must be set")
-		}
-	} else if queryParam != "" && headerName != "" {
-		log.Fatalf("at most one of -query-param, -header-name and -label-value must be set")
+	if oidcClientId == "" || oidcIssuer == "" {
+		log.Fatalf("oidcClientId and oidcIssuer are required")
 	}
 
 	upstreamURL, err := url.Parse(upstream)
@@ -131,37 +96,10 @@ func main() {
 	}
 
 	if regexMatch {
-		if len(labelValues) > 0 {
-			if len(labelValues) > 1 {
-				log.Fatalf("Regex match is limited to one label value")
-			}
-
-			compiledRegex, err := regexp.Compile(labelValues[0])
-			if err != nil {
-				log.Fatalf("Invalid regexp: %v", err.Error())
-				return
-			}
-
-			if compiledRegex.MatchString("") {
-				log.Fatalf("Regex should not match empty string")
-				return
-			}
-		}
-
 		opts = append(opts, injectproxy.WithRegexMatch())
 	}
 
-	var extractLabeler injectproxy.ExtractLabeler
-	switch {
-	case len(labelValues) > 0:
-		extractLabeler = injectproxy.StaticLabelEnforcer(labelValues)
-	case queryParam != "":
-		extractLabeler = injectproxy.HTTPFormEnforcer{ParameterName: queryParam}
-	case headerName != "":
-		extractLabeler = injectproxy.HTTPHeaderEnforcer{Name: http.CanonicalHeaderKey(headerName), ParseListSyntax: headerUsesListSyntax}
-	case (oidcClientId != "" && oidcIssuer != ""):
-		extractLabeler = OIDCTokenEnforcer{ClientID: oidcClientId, Issuer: oidcIssuer, ConfigPath: oidcConfigPath}
-	}
+	extractLabeler := OIDCTokenEnforcer{ClientID: oidcClientId, Issuer: oidcIssuer, ConfigPath: oidcConfigPath}
 
 	var g run.Group
 
