@@ -20,14 +20,14 @@ See [Prometheus Operator](https://github.com/prometheus-operator/prometheus-oper
 
 ### Helm
 
-See: https://github.com/prometheus-community/helm-charts/tree/main/charts/oidc-prom-label-proxy
+See: https://github.com/prometheus-community/helm-charts/tree/main/charts/prom-label-proxy
 
 ### Docker
 
 We publish docker images for each release, see:
 
-* [`quay.io/prometheuscommunity/oidc-prom-label-proxy`](https://quay.io/repository/prometheuscommunity/oidc-prom-label-proxy?tab=tags) for newest images
-* `quay.io/coreos/oidc-prom-label-proxy:v0.1.0` for the initial v0.1.0 release.
+* [`quay.io/prometheuscommunity/prom-label-proxy`](https://quay.io/repository/prometheuscommunity/prom-label-proxy?tab=tags) for newest images
+* `quay.io/coreos/prom-label-proxy:v0.1.0` for the initial v0.1.0 release.
 
 ### Building from source
 
@@ -37,7 +37,7 @@ the [Go](https://golang.org/) 1.15+ [toolchain](https://github.com/golang/tools)
 `oidc-prom-label-proxy` can be downloaded and built by running:
 
 ```bash
-go get github.com/prometheus-community/oidc-prom-label-proxy
+go get github.com/lukasboettcher/oidc-prom-label-proxy
 ```
 
 ## How does this project work?
