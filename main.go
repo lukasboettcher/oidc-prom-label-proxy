@@ -94,7 +94,8 @@ func main() {
 		opts = append(opts, injectproxy.WithRegexMatch())
 	}
 
-	extractLabeler := OIDCTokenEnforcer{ClientID: oidcClientId, Issuer: oidcIssuer, ConfigPath: oidcConfigPath}
+	// extractLabeler := NewOIDCTokenEnforcer{ClientID: oidcClientId, Issuer: oidcIssuer, ConfigPath: oidcConfigPath}
+	extractLabeler := NewOIDCTokenEnforcer(oidcClientId, oidcIssuer, oidcConfigPath)
 
 	var g run.Group
 

@@ -15,10 +15,23 @@ import (
 	"github.com/prometheus-community/prom-label-proxy/injectproxy"
 )
 
+func NewOIDCTokenEnforcer(clientID, issuer, configPath string) *OIDCTokenEnforcer {
+	config := OIDCConfig{}
+	err := config.readOIDCConfig(configPath)
+	if err != nil {
+		log.Printf("Failed to read oidc config, ignoring tenant mapping: %v", err)
+	}
+	return &OIDCTokenEnforcer{
+		ClientID: clientID,
+		Issuer:   issuer,
+		Config:   config,
+	}
+}
+
 type OIDCTokenEnforcer struct {
-	ClientID   string
-	Issuer     string
-	ConfigPath string
+	ClientID string
+	Issuer   string
+	Config   OIDCConfig
 }
 
 type OIDCConfig struct {
@@ -34,6 +47,8 @@ func (c *OIDCConfig) readOIDCConfig(path string) error {
 	if err != nil {
 		return err
 	}
+	log.Println("Starting OIDC prom-label-proxy with the following tenant mapping:")
+	log.Printf("%+v\n", c)
 	return nil
 }
 
@@ -44,12 +59,6 @@ type Tenant struct {
 }
 
 func (ote OIDCTokenEnforcer) ExtractLabel(next http.HandlerFunc) http.Handler {
-	config := OIDCConfig{}
-	err := config.readOIDCConfig(ote.ConfigPath)
-	if err != nil {
-		log.Printf("Failed to read oidc config, ignoring tenant mapping: %v", err)
-	}
-
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		labelValues := []string{}
 
@@ -83,7 +92,7 @@ func (ote OIDCTokenEnforcer) ExtractLabel(next http.HandlerFunc) http.Handler {
 			return
 		}
 
-		for _, t := range config.Tenants {
+		for _, t := range ote.Config.Tenants {
 			itTenantMember := false
 			for _, g := range t.Groups {
 				if slices.Contains(claims.Groups, g) {
