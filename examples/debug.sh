@@ -1,4 +1,4 @@
-docker run --rm -it --network host grafana/grafana
+docker run --rm -it --network host -v `pwd`/grafana.ini:/etc/grafana/grafana.ini grafana/grafana
 go run . -label job -upstream http://demo.do.prometheus.io:9090 \
     -insecure-listen-address 127.0.0.1:8080 \
     -oidc-client-id XXX \
