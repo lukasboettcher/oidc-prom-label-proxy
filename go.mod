@@ -6,8 +6,8 @@ require (
 	github.com/coreos/go-oidc/v3 v3.11.0
 	github.com/metalmatze/signal v0.0.0-20210307161603-1c9aa721a97a
 	github.com/oklog/run v1.1.0
-	github.com/prometheus/client_golang v1.20.2
 	github.com/prometheus-community/prom-label-proxy v0.11.0
+	github.com/prometheus/client_golang v1.20.3
 	gopkg.in/yaml.v3 v3.0.1
 )
 
