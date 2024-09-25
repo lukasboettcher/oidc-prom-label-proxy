@@ -1,0 +1,17 @@
+services:
+  grafana:
+    image: grafana/grafana
+    network_mode: "host"
+    volumes:
+      - ./examples/grafana.ini:/etc/grafana/grafana.ini
+      - ./examples/datasource.yaml:/etc/grafana/provisioning/datasources/datasource.yaml
+    env_file: ".env"
+  proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    network_mode: "host"
+    volumes:
+      - ./examples/tenant-config.yaml:/etc/tenant-config.yaml
+    env_file: ".env"
+    command: -label job -upstream http://demo.do.prometheus.io:9090 -insecure-listen-address 127.0.0.1:8080 -oidc-client-id $GF_AUTH_AZUREAD_CLIENT_ID -oidc-issuer https://login.microsoftonline.com/$GF_AUTH_AZUREAD_TENANT_ID/v2.0 -oidc-config /etc/tenant-config.yaml
